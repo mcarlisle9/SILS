@@ -1,0 +1,148 @@
+/*! \file
+*               \$Revision: 1.0 $
+*
+*               \$Author: mcarlisle $
+*
+*               \$Date: 2015-07-21 15:31:00 +0000 (Tue, 21 Jul 2015) $
+*
+*               \$HeadURL: $
+*
+*   \brief      SILS Project - Main Program
+*/
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Declaring States, Global Variables and Arrays
+*
+*   \author        MC
+*
+***************************************************************************************************/
+
+// States bieng declared & first state chosen
+enum STATE
+{
+  RUNNING,
+  SLEEP
+}
+STATE = RUNNING;
+
+// Declare variables to store received data from PC(0) & UTR(1)
+int SERIAL_0_INCOMING_VALUE;
+int SERIAL_1_INCOMING_VALUE;
+
+// Variable to count the Byte number
+int BYTE_NUMBER = 0;
+
+// Flags to check for new frame start
+boolean S_BYTE_FLAG = false;
+boolean SP_BYTE_FLAG = false;
+
+// 600ms Interrupt Flags and Counter Variable
+boolean INTERRUPT_FLAG = false;
+boolean SIX_DS_INTERRUPT_FLAG = false;
+int INTERRPUT_COUNTER = 0;
+
+// Blank Frame to store data from UTR
+int UTR_FRAME[20] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00};
+                     // For Scaleability should be SSP_UTR_CONFIG433[16] + 11 long
+                     
+// Frame to Wake Up UTR
+char SSP_UTR_AWAKE[9] = {0x53, 0x50, 0x00, 0x05, 0x02, 0x10, 0x01, 0xD0, 0x7B};
+
+// Frame to put UTR to sleep
+char SSP_UTR_SLEEP[9] = {0x53, 0x50, 0x00, 0x05, 0x02, 0x10, 0x00, 0xC0, 0x5A};
+
+// Frame to send down HKMC reg addresses
+int SSP_UTR_CONFIG433[115] = {0x0A, 0x0B, 0x0C, 0x00, 0x6E, 0x80, 0x00, 0x00,
+                              0xA5, 0x53, 0x50, 0x00, 0x65, 0x02, 0x06, 0x00,
+                              0x09, 0x01, 0x59, 0x93, 0x5a, 0x24, 0x5b, 0x13,
+                              0x5c, 0x09, 0x33, 0x28, 0x4b, 0xdc, 0x58, 0x15,
+                              0x56, 0x48, 0x48, 0x02, 0x81, 0x33, 0x82, 0x32,
+                              0x89, 0x00, 0x8b, 0x1f, 0x94, 0xf7, 0xa5, 0x0c,
+                              0xa6, 0x42, 0x3c, 0x09, 0x3d, 0x31, 0x39, 0x02,
+                              0x3e, 0x03, 0x3a, 0x0e, 0x3b, 0x2a, 0x36, 0x40,
+                              0x4d, 0x80, 0x4e, 0x10, 0x4f, 0x08, 0x51, 0x56,
+                              0x52, 0x55, 0x53, 0x55, 0x54, 0x55, 0x24, 0x13,
+                              0x26, 0x70, 0x2d, 0x28, 0x2e, 0x03, 0x2f, 0x00,
+                              0x30, 0x03, 0x31, 0x31, 0x3f, 0x0a, 0x42, 0x0a,
+                              0x44, 0x14, 0x45, 0x37, 0x46, 0xea, 0x47, 0x6a,
+                              0x8e, 0x00, 0x8f, 0x00, 0x90, 0x00, 0x91, 0xff,
+                              0x16, 0xec, 0x00};
+                              // Size 115 can vary
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Setup - Sets Serial Ports and Gives Options
+*
+*   \author        MC
+*
+***************************************************************************************************/
+
+void setup()
+{
+  // Open serial communications with Computer(0, USB) and UTR(1, Pins 18(Orange) & 19(Yellow))
+  Serial.begin(9600);
+  Serial1.begin(115200);
+  
+  PRINT_OPTIONS();
+  SETUP_10HZ_INTERRUPT();
+}
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Main Function
+*
+*   \author        MC
+*
+***************************************************************************************************/
+
+void loop()
+{
+  // From PC
+  if ( Serial.available() > 0 )
+  {
+    SERIAL_0_INCOMING_VALUE = Serial.read();
+    CHECK_OPTIONS_TO_SEND();
+  }
+  
+  switch(STATE)
+  {
+    case RUNNING:
+      
+      // Bytes From UTR
+      if ( Serial1.available() > 0 )
+      {
+        SERIAL_1_INCOMING_VALUE = Serial1.read();
+        
+        // Check for 2 start Bytes to start new frame
+        SP_BYTE_FLAG = SP_BYTES_NEW_FRAME_CHECK();
+        S_BYTE_FLAG = S_BYTE_NEW_FRAME_CHECK();
+        
+        if ( BYTE_NUMBER <= 19 )
+          UTR_FRAME[BYTE_NUMBER] = SERIAL_1_INCOMING_VALUE;
+        
+        // Check if frame from UTR is correct and finished
+        UTR_FRAME_CHECK();
+        
+        BYTE_NUMBER++;
+      }
+      
+    break;
+    
+    case SLEEP:
+      
+      // Sleep State
+      
+    break;
+  }
+  
+  if ( SIX_DS_INTERRUPT_FLAG == true )
+  {
+    SEND_UTR_REGISTER();
+  }
+}
