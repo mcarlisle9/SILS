@@ -1,0 +1,85 @@
+/*! \file
+*               \$Revision: 1.0 $
+*
+*               \$Author: mcarlisle $
+*
+*               \$Date: 2015-07-27 15:31:00 +0000 (Mon, 27 Jul 2015) $
+*
+*               \$HeadURL: $
+*
+*   \brief      SILS Project - Functions used to check Frame from UTR
+*/
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Checks for 'S' byte of new frame
+*
+*   \author        MC
+*
+*   \param         none
+*
+*   \return        S_BYTE_FLAG - T/F
+*
+***************************************************************************************************/
+
+boolean S_BYTE_NEW_FRAME_CHECK()
+{
+  if ( SERIAL_1_INCOMING_VALUE == 0x53 )
+    return true;
+  else
+    return false;
+}
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Checks for 'SP' bytes of new frame if 'S' byte has been detected
+*
+*   \author        MC
+*
+*   \param         none
+*
+*   \return        SP_BYTE_FLAG - T/F
+*
+***************************************************************************************************/
+
+boolean SP_BYTES_NEW_FRAME_CHECK()
+{
+  if ( SERIAL_1_INCOMING_VALUE == 0x50 && S_BYTE_FLAG == true )
+  {
+    UTR_FRAME[0] = 0x53;
+    BYTE_NUMBER = 1;
+    return true;
+  }
+}
+
+/*!
+****************************************************************************************************
+*
+*   \brief         Filters out unwanted Frames
+*   \brief         Filters:  Full frame received, ID correct, 'SP' Bytes detected
+*   \brief         Filters:  Data Length Byte is correct, Message ID is correct
+*
+*   \author        MC
+*
+***************************************************************************************************/
+
+void UTR_FRAME_CHECK()
+{
+  if(  ( BYTE_NUMBER == SSP_UTR_CONFIG433[16] + 10 ) // Byte number = expected data length 
+    && ( UTR_FRAME[7] == SSP_UTR_CONFIG433[5] )  // ID filter
+    && ( UTR_FRAME[8] == SSP_UTR_CONFIG433[6] )  // ID filter
+    && ( UTR_FRAME[9] == SSP_UTR_CONFIG433[7] )  // ID filter
+    && ( UTR_FRAME[10] == SSP_UTR_CONFIG433[8] ) // ID filter
+    && ( UTR_FRAME[3] == SSP_UTR_CONFIG433[16] + 7 ) // UTR frame length = Declared UTR frame length
+    && ( SP_BYTE_FLAG == true )  // New Byte has been received
+    && ( UTR_FRAME[4] == 0x02 )  // Message ID
+    && ( UTR_FRAME[5] == 0x01 )  // Message ID
+    )
+    
+  {
+    SEND_FRAME_WIFI();
+    PRINT_UTR_FRAME();
+  }
+}
